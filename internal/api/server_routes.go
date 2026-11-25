@@ -57,6 +57,12 @@ func (s *Server) setupRoutes() {
 
 	s.engine.GET("/management.html", s.serveManagementControlPanel)
 	openaiHandlers := openai.NewOpenAIAPIHandler(s.handlers)
+	explicitModels := explicitOpenRouterModels()
+	for _, model := range explicitModels {
+		if entry := model.catalogEntry(); entry != nil {
+			openaiHandlers.AdditionalCatalogModels = append(openaiHandlers.AdditionalCatalogModels, entry)
+		}
+	}
 	geminiHandlers := gemini.NewGeminiAPIHandler(s.handlers)
 	claudeCodeHandlers := claude.NewClaudeCodeAPIHandler(s.handlers)
 	openaiResponsesHandlers := openai.NewOpenAIResponsesAPIHandler(s.handlers)
@@ -74,7 +80,9 @@ func (s *Server) setupRoutes() {
 			c.Set(handlers.ModelDetailIDContextKey, strings.TrimPrefix(c.Param("model"), "/"))
 			s.unifiedModelsHandler(openaiHandlers, claudeCodeHandlers)(c)
 		})
-		registerExplicitProviderRoutes(v1)
+		for _, model := range explicitModels {
+			v1.POST(model.path, explicitProviderRoute(model.url, model.key, model.id, http.DefaultTransport, model.translators...))
+		}
 		v1.POST("/chat/completions", openaiHandlers.ChatCompletions)
 		v1.POST("/completions", openaiHandlers.Completions)
 		v1.POST("/images/generations", openaiHandlers.ImagesGenerations)

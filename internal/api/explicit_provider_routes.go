@@ -14,15 +14,32 @@ import (
 
 const explicitProviderBodyLimit = 4 << 20
 
-func registerExplicitProviderRoutes(v1 *gin.RouterGroup) {
-	v1.POST("/embeddings", explicitProviderRoute(
-		"https://openrouter.ai/api/v1/embeddings", os.Getenv("OPENROUTER_EMBEDDINGS_API_KEY"),
-		os.Getenv("OPENROUTER_EMBEDDINGS_MODEL"), http.DefaultTransport,
-	))
-	v1.POST("/decisions", explicitProviderRoute(
-		"https://openrouter.ai/api/alpha/decisions", os.Getenv("OPENROUTER_DECISIONS_API_KEY"),
-		os.Getenv("OPENROUTER_DECISIONS_MODEL"), http.DefaultTransport, translateDecisions,
-	))
+type explicitOpenRouterModel struct {
+	path, url, key, id, owner string
+	translators               []decisionTranslator
+}
+
+func explicitOpenRouterModels() []explicitOpenRouterModel {
+	return []explicitOpenRouterModel{
+		{
+			path: "/embeddings", url: "https://openrouter.ai/api/v1/embeddings",
+			key: os.Getenv("OPENROUTER_EMBEDDINGS_API_KEY"),
+			id:  os.Getenv("OPENROUTER_EMBEDDINGS_MODEL"), owner: "openrouter",
+		},
+		{
+			path: "/decisions", url: "https://openrouter.ai/api/alpha/decisions",
+			key: os.Getenv("OPENROUTER_DECISIONS_API_KEY"),
+			id:  os.Getenv("OPENROUTER_DECISIONS_MODEL"), owner: "openrouter",
+			translators: []decisionTranslator{translateDecisions},
+		},
+	}
+}
+
+func (m explicitOpenRouterModel) catalogEntry() map[string]any {
+	if m.key == "" || m.id == "" {
+		return nil
+	}
+	return map[string]any{"id": m.id, "object": "model", "owned_by": m.owner, "created": 0}
 }
 
 // explicitProviderRoute deliberately does not use the model router or its retries.

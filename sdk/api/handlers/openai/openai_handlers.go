@@ -31,6 +31,10 @@ import (
 // It holds a pool of clients to interact with the backend service.
 type OpenAIAPIHandler struct {
 	*handlers.BaseAPIHandler
+
+	// AdditionalCatalogModels describes models served by separate routes.
+	// It is deliberately not part of the registry used for inference.
+	AdditionalCatalogModels []map[string]any
 }
 
 // NewOpenAIAPIHandler creates a new OpenAI API handlers instance.
@@ -83,7 +87,8 @@ func (h *OpenAIAPIHandler) OpenAIModels(c *gin.Context) {
 	allModels := h.Models()
 
 	// Filter to only include the 4 required fields: id, object, created, owned_by
-	filteredModels := make([]map[string]any, len(allModels))
+	filteredModels := make([]map[string]any, len(allModels), len(allModels)+len(h.AdditionalCatalogModels))
+	seen := make(map[string]bool, cap(filteredModels))
 	for i, model := range allModels {
 		filteredModel := map[string]any{
 			"id":     model["id"],
@@ -101,6 +106,16 @@ func (h *OpenAIAPIHandler) OpenAIModels(c *gin.Context) {
 		}
 
 		filteredModels[i] = filteredModel
+		if id, ok := model["id"].(string); ok {
+			seen[id] = true
+		}
+	}
+	for _, model := range h.AdditionalCatalogModels {
+		id, ok := model["id"].(string)
+		if ok && id != "" && !seen[id] {
+			filteredModels = append(filteredModels, model)
+			seen[id] = true
+		}
 	}
 
 	h.WriteModelListResponse(c, h.HandlerType(), gin.H{
